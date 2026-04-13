@@ -21,10 +21,14 @@ jobs:
             label: Windows
             platform: windows/amd64
             artifact_name: windows-amd64
-          - os: macos-latest
-            label: macOS
+          - os: macos-13
+            label: macOS (Intel)
             platform: darwin/amd64
             artifact_name: macos-amd64
+          - os: macos-latest
+            label: macOS (Apple Silicon)
+            platform: darwin/arm64
+            artifact_name: macos-arm64
           - os: ubuntu-latest
             label: Linux
             platform: linux/amd64
