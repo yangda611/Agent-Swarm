@@ -21,7 +21,7 @@ jobs:
             label: Windows
             platform: windows/amd64
             artifact_name: windows-amd64
-          - os: macos-13
+          - os: macos-15-intel
             label: macOS (Intel)
             platform: darwin/amd64
             artifact_name: macos-amd64
@@ -87,15 +87,15 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item "build/bin/maliang swarm.exe" "dist/maliang-swarm-${{ github.ref_name }}-${{ matrix.artifact_name }}.exe"
+          Copy-Item "build/bin/maliang-swarm.exe" "dist/maliang-swarm-${{ github.ref_name }}-${{ matrix.artifact_name }}.exe"
 
       - name: Package asset (macOS)
         if: runner.os == 'macOS'
         shell: bash
         run: |
           mkdir -p dist
-          APP_PATH="build/bin/maliang swarm.app"
-          BIN_PATH="build/bin/maliang swarm"
+          APP_PATH="build/bin/maliang-swarm.app"
+          BIN_PATH="build/bin/maliang-swarm"
 
           if [ -d "$APP_PATH" ]; then
             ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" "dist/maliang-swarm-${{ github.ref_name }}-${{ matrix.artifact_name }}.zip"
@@ -112,14 +112,14 @@ jobs:
         shell: bash
         run: |
           mkdir -p dist
-          BIN_PATH="build/bin/maliang swarm"
+          BIN_PATH="build/bin/maliang-swarm"
           if [ ! -f "$BIN_PATH" ]; then
             echo "No Linux build output found"
             exit 1
           fi
 
           chmod +x "$BIN_PATH"
-          tar -C build/bin -czf "dist/maliang-swarm-${{ github.ref_name }}-${{ matrix.artifact_name }}.tar.gz" "maliang swarm"
+          tar -C build/bin -czf "dist/maliang-swarm-${{ github.ref_name }}-${{ matrix.artifact_name }}.tar.gz" "maliang-swarm"
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
