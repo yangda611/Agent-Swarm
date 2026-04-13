@@ -1,0 +1,33 @@
+html {
+    background: #101623;
+    color: #f5f0dc;
+}
+
+body {
+    margin: 0;
+    color: #f5f0dc;
+    font-family: "Nunito", "Trebuchet MS", "Microsoft YaHei UI", sans-serif;
+    background:
+        radial-gradient(circle at top, rgba(56, 76, 121, 0.45), transparent 42%),
+        linear-gradient(180deg, #162133 0%, #101623 100%);
+}
+
+@font-face {
+    font-family: "Nunito";
+    font-style: normal;
+    font-weight: 400;
+    src: local(""),
+    url("assets/fonts/nunito-v16-latin-regular.woff2") format("woff2");
+}
+
+:root {
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+#root {
+    min-height: 100vh;
+}
