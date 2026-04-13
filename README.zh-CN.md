@@ -32,9 +32,16 @@ wails dev
 wails build
 ```
 
-构建产物：
+## Release 自动化（支持三平台）
 
-- `build/bin/maliang swarm.exe`
+仓库已配置 GitHub Actions 发布流程：
+
+- 文件：`.github/workflows/release.yml`
+- 触发方式：推送 `v*` 标签（如 `v0.1.1`）或手动触发
+- 发布产物：
+  - Windows：`.exe`
+  - macOS：`.zip`（`.app` 或二进制）
+  - Linux：`.tar.gz`（二进制包）
 
 ## 项目结构
 
@@ -42,14 +49,6 @@ wails build
 - `internal/storage`：SQLite 持久化与迁移
 - `frontend/src`：控制台、办公室视图、任务板、时间线、设置与弹窗
 - `docs/swarm_enterprise_plan.md`：规划文档
-
-## Release 自动化
-
-仓库已配置 GitHub Actions 发布流程：
-
-- 文件：`.github/workflows/release.yml`
-- 触发方式：推送 `v*` 标签（如 `v0.1.0`）或手动触发
-- 发布内容：自动构建 Windows 可执行文件并上传到 GitHub Release
 
 ## 许可
 

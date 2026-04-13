@@ -32,9 +32,16 @@ wails dev
 wails build
 ```
 
-Build output:
+## Release Automation
 
-- `build/bin/maliang swarm.exe`
+GitHub Actions release workflow is configured:
+
+- Workflow file: `.github/workflows/release.yml`
+- Trigger: push a `v*` tag (for example `v0.1.1`) or run manually
+- Output assets:
+  - Windows: `.exe`
+  - macOS: `.zip` (app bundle or binary)
+  - Linux: `.tar.gz` (binary package)
 
 ## Project Layout
 
@@ -42,14 +49,6 @@ Build output:
 - `internal/storage`: SQLite schema and persistence
 - `frontend/src`: dashboard, office view, task board, timeline, settings, and dialogs
 - `docs/swarm_enterprise_plan.md`: planning document
-
-## Release Automation
-
-GitHub Actions release workflow is configured:
-
-- Workflow file: `.github/workflows/release.yml`
-- Trigger: push a `v*` tag (for example `v0.1.0`) or run manually
-- Output: builds Windows executable and uploads it to GitHub Release assets
 
 ## License
 

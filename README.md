@@ -12,7 +12,7 @@
 
 - 本地开发：`wails dev`
 - 生产构建：`wails build`
-- 自动发布：推送标签 `v*`（例如 `v0.1.0`）触发 GitHub Release 工作流
+- 自动发布：推送标签 `v*`（例如 `v0.1.1`）触发 GitHub Release 工作流（Windows/macOS/Linux）
 
 ## 说明
 
