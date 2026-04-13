@@ -59,12 +59,21 @@ jobs:
         run: |
           export DEBIAN_FRONTEND=noninteractive
           sudo apt-get update
+          WEBKIT_PKG="libwebkit2gtk-4.0-dev"
+          WEBKIT_TAG=""
+          if apt-cache show libwebkit2gtk-4.1-dev >/dev/null 2>&1; then
+            WEBKIT_PKG="libwebkit2gtk-4.1-dev"
+            WEBKIT_TAG="webkit2_41"
+          fi
+
           sudo apt-get install -yq \
             libgtk-3-dev \
-            libwebkit2gtk-4.1-dev \
+            "$WEBKIT_PKG" \
             pkg-config \
             libgl1-mesa-dev \
             xorg-dev
+
+          echo "WAILS_LINUX_WEBKIT_TAG=${WEBKIT_TAG}" >> "$GITHUB_ENV"
 
       - name: Install frontend dependencies
         run: npm ci
@@ -85,7 +94,11 @@ jobs:
         shell: bash
         run: |
           export PATH="$HOME/go/bin:$PATH"
-          wails build -clean -platform "${{ matrix.platform }}"
+          if [ "${{ runner.os }}" = "Linux" ] && [ -n "${WAILS_LINUX_WEBKIT_TAG}" ]; then
+            wails build -clean -platform "${{ matrix.platform }}" -tags "${WAILS_LINUX_WEBKIT_TAG}"
+          else
+            wails build -clean -platform "${{ matrix.platform }}"
+          fi
 
       - name: Package asset (Windows)
         if: runner.os == 'Windows'
