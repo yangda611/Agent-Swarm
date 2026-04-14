@@ -18,7 +18,7 @@ func defaultAIProviders() []domain.AIProviderConfig {
 			Name:          "OpenAI 兼容网关",
 			Format:        "openai-compatible",
 			BaseURL:       "https://api.openai.com/v1",
-			APIPath:       "/responses",
+			APIPath:       "/chat/completions",
 			DefaultModel:  "gpt-5.4",
 			PlannerModel:  "gpt-5.4",
 			WorkerModel:   "gpt-5.4-mini",
@@ -296,7 +296,7 @@ func normalizeProviderInput(input AIProviderInput) AIProviderInput {
 	input.Name = compact(input.Name)
 	input.Format = normalizeProviderFormat(input.Format)
 	input.BaseURL = strings.TrimSpace(input.BaseURL)
-	input.APIPath = strings.TrimSpace(input.APIPath)
+	input.APIPath = normalizeProviderAPIPath(input.Format, input.APIPath)
 	input.APIVersion = strings.TrimSpace(input.APIVersion)
 	input.APIKey = strings.TrimSpace(input.APIKey)
 	input.DefaultModel = compact(input.DefaultModel)
@@ -335,6 +335,20 @@ func normalizeProviderInput(input AIProviderInput) AIProviderInput {
 	}
 
 	return input
+}
+
+func normalizeProviderAPIPath(format string, value string) string {
+	path := strings.TrimSpace(value)
+	if format != "openai-compatible" {
+		return path
+	}
+
+	normalized := strings.ToLower(path)
+	if normalized == "" || normalized == "/responses" || normalized == "responses" {
+		return "/chat/completions"
+	}
+
+	return path
 }
 
 func providerState(provider domain.AIProviderConfig) AIProvider {
@@ -397,7 +411,7 @@ func defaultProviderAPIPath(format string) string {
 	case "custom-http":
 		return "/v1/dispatch"
 	default:
-		return "/responses"
+		return "/chat/completions"
 	}
 }
 

@@ -22,7 +22,7 @@ const baseUrlPlaceholders: Record<string, string> = {
 };
 
 const pathPlaceholders: Record<string, string> = {
-    "openai-compatible": "/responses",
+    "openai-compatible": "/chat/completions",
     anthropic: "/v1/messages",
     gemini: "/v1beta/models",
     "azure-openai": "/openai/responses",
@@ -86,7 +86,6 @@ export function AIProviderPanel({
         const checks = [
             {label: "接口名称", ok: form.name.trim().length > 0},
             {label: "基础地址", ok: form.baseUrl.trim().length > 0},
-            {label: "接口路径", ok: form.apiPath.trim().length > 0},
             {label: "默认模型", ok: form.defaultModel.trim().length > 0},
         ];
 
@@ -95,11 +94,11 @@ export function AIProviderPanel({
         }
 
         return checks;
-    }, [form.apiPath, form.baseUrl, form.defaultModel, form.name]);
+    }, [form.baseUrl, form.defaultModel, form.name]);
 
     const blockingChecks = requiredChecks.filter((item) => !item.ok);
     const canSave = !isBusy && blockingChecks.length === 0;
-    const canProbe = !isBusy && form.baseUrl.trim().length > 0 && form.apiPath.trim().length > 0;
+    const canProbe = !isBusy && form.baseUrl.trim().length > 0;
     const primarySummary = primaryProvider.trim() ? "已绑定主路由" : "未设置主路由";
 
     async function submit(event: FormEvent<HTMLFormElement>) {
@@ -110,7 +109,11 @@ export function AIProviderPanel({
         }
 
         try {
-            await onUpsertProvider(form);
+            const finalForm = {
+                ...form,
+                apiPath: form.apiPath || pathPlaceholders[form.format] || "",
+            };
+            await onUpsertProvider(finalForm);
             setForm(emptyProviderInput(providers.length === 0));
             setEditingName("");
             setProbeReport("");
@@ -161,12 +164,16 @@ export function AIProviderPanel({
 
     async function probeCurrentProvider() {
         if (!canProbe) {
-            onNotify?.("warning", "无法测试", "请先填写基础地址和接口路径。");
+            onNotify?.("warning", "无法测试", "请先填写基础地址。");
             return;
         }
 
         try {
-            const report = await onProbeProvider(form);
+            const finalForm = {
+                ...form,
+                apiPath: form.apiPath || pathPlaceholders[form.format] || "",
+            };
+            const report = await onProbeProvider(finalForm);
             setProbeReport(report);
 
             const normalized = report.toLowerCase();
@@ -187,7 +194,6 @@ export function AIProviderPanel({
     }
 
     const baseUrlPlaceholder = baseUrlPlaceholders[form.format];
-    const pathPlaceholder = pathPlaceholders[form.format];
     const modelPlaceholder = modelPlaceholders[form.format];
     const isOpenAICompatible = form.format === "openai-compatible";
 
@@ -306,32 +312,33 @@ export function AIProviderPanel({
                                         value={form.baseUrl}
                                     />
                                     {isOpenAICompatible ? (
-                                        <small className="field-help">OpenAI 兼容格式请直接填到版本层级，例如 `https://openclawroot.com/v1`。</small>
+                                        <small className="field-help">OpenAI 兼容格式请直接填到版本层级，例如 `https://openclawroot.com/v1`；大多数兼容网关推荐把请求路径设为 `/chat/completions`。</small>
                                     ) : null}
                                 </label>
 
                                 <label className="field-group">
-                                    <span className="field-label">接口路径</span>
+                                    <span className="field-label">请求路径</span>
                                     <input
                                         className="field-input"
                                         disabled={isBusy}
                                         onChange={(event) => setForm((current) => ({...current, apiPath: event.target.value}))}
-                                        placeholder={pathPlaceholder}
+                                        placeholder={pathPlaceholders[form.format]}
                                         value={form.apiPath}
                                     />
+                                    <small className="field-help">兼容格式默认建议使用 `/chat/completions`；只有明确支持时再改成别的路径。</small>
                                 </label>
-                                {!isOpenAICompatible ? (
 
-                                <label className="field-group">
-                                    <span className="field-label">接口版本</span>
-                                    <input
-                                        className="field-input"
-                                        disabled={isBusy}
-                                        onChange={(event) => setForm((current) => ({...current, apiVersion: event.target.value}))}
-                                        placeholder="可选"
-                                        value={form.apiVersion}
-                                    />
-                                </label>
+                                {!isOpenAICompatible ? (
+                                    <label className="field-group">
+                                        <span className="field-label">接口版本</span>
+                                        <input
+                                            className="field-input"
+                                            disabled={isBusy}
+                                            onChange={(event) => setForm((current) => ({...current, apiVersion: event.target.value}))}
+                                            placeholder="可选"
+                                            value={form.apiVersion}
+                                        />
+                                    </label>
                                 ) : null}
                             </div>
                         </section>
