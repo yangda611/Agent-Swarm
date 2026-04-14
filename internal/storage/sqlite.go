@@ -276,6 +276,21 @@ func (s *Store) LoadSnapshot(ctx context.Context) (domain.Snapshot, error) {
 		return domain.Snapshot{}, err
 	}
 
+	var err error
+	snapshot.ModelProfiles, err = s.loadModelProfiles(ctx)
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
+	snapshot.AIProviders, err = s.loadAIProviders(ctx)
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
+
+	snapshot.Zones, err = s.loadZones(ctx)
+	if err != nil {
+		return domain.Snapshot{}, err
+	}
+
 	if err := s.db.QueryRowContext(ctx, `
 		SELECT id, title, mission, deliverable, priority, task_type, subtitle, workspace_name, active_template, current_stage,
 		       atomic_task_policy, review_mode, planner_source, suggested_agent_id, step
@@ -299,23 +314,8 @@ func (s *Store) LoadSnapshot(ctx context.Context) (domain.Snapshot, error) {
 		&snapshot.Run.Step,
 	); err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			return domain.Snapshot{}, ErrNoSnapshot
+			return snapshot, nil
 		}
-		return domain.Snapshot{}, err
-	}
-
-	var err error
-	snapshot.ModelProfiles, err = s.loadModelProfiles(ctx)
-	if err != nil {
-		return domain.Snapshot{}, err
-	}
-	snapshot.AIProviders, err = s.loadAIProviders(ctx)
-	if err != nil {
-		return domain.Snapshot{}, err
-	}
-
-	snapshot.Zones, err = s.loadZones(ctx)
-	if err != nil {
 		return domain.Snapshot{}, err
 	}
 
@@ -430,6 +430,23 @@ func (s *Store) SaveSnapshot(ctx context.Context, snapshot domain.Snapshot) erro
 		}
 	}
 
+	if _, err = tx.ExecContext(ctx, `DELETE FROM scene_zones`); err != nil {
+		return err
+	}
+	for _, zone := range snapshot.Zones {
+		if _, err = tx.ExecContext(ctx, `
+			INSERT INTO scene_zones (id, name, purpose, accent, x, y, w, h, sort_order)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, zone.ID, zone.Name, zone.Purpose, zone.Accent, zone.X, zone.Y, zone.W, zone.H, zone.SortOrder); err != nil {
+			return err
+		}
+	}
+
+	if strings.TrimSpace(snapshot.Run.ID) == "" {
+		err = tx.Commit()
+		return err
+	}
+
 	if _, err = tx.ExecContext(ctx, `
 		INSERT INTO runs (
 			id, title, mission, deliverable, priority, task_type, subtitle, workspace_name, active_template, current_stage,
@@ -464,18 +481,6 @@ func (s *Store) SaveSnapshot(ctx context.Context, snapshot domain.Snapshot) erro
 			INSERT INTO workflow_gates (id, run_id, label, status, sort_order)
 			VALUES (?, ?, ?, ?, ?)
 		`, gate.ID, snapshot.Run.ID, gate.Label, gate.Status, gate.SortOrder); err != nil {
-			return err
-		}
-	}
-
-	if _, err = tx.ExecContext(ctx, `DELETE FROM scene_zones`); err != nil {
-		return err
-	}
-	for _, zone := range snapshot.Zones {
-		if _, err = tx.ExecContext(ctx, `
-			INSERT INTO scene_zones (id, name, purpose, accent, x, y, w, h, sort_order)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-		`, zone.ID, zone.Name, zone.Purpose, zone.Accent, zone.X, zone.Y, zone.W, zone.H, zone.SortOrder); err != nil {
 			return err
 		}
 	}

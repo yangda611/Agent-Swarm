@@ -1,4 +1,5 @@
 export interface DashboardState {
+    hasActiveRun: boolean;
     title: string;
     subtitle: string;
     workspaceName: string;

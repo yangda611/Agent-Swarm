@@ -67,6 +67,89 @@ func TestCreateRunCanReplaceExistingSnapshot(t *testing.T) {
 	}
 }
 
+func TestBlankWorkspaceCanPersistSettingsAndProvidersWithoutRun(t *testing.T) {
+	t.Parallel()
+
+	service, err := NewService(t.TempDir(), eventbus.New())
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	defer func() {
+		if closeErr := service.Close(); closeErr != nil {
+			t.Fatalf("service.Close() error = %v", closeErr)
+		}
+	}()
+
+	ctx := context.Background()
+
+	initial, err := service.GetDashboardState(ctx)
+	if err != nil {
+		t.Fatalf("GetDashboardState() error = %v", err)
+	}
+	if initial.HasActiveRun {
+		t.Fatalf("GetDashboardState() unexpectedly reported an active run")
+	}
+	if len(initial.Tasks) != 0 || len(initial.Agents) != 0 {
+		t.Fatalf("blank workspace should not preload tasks or agents")
+	}
+	if len(initial.Settings.AIProviders) != 0 {
+		t.Fatalf("blank workspace should not preload AI providers")
+	}
+
+	updatedSettings, err := service.UpdateRuntimeSettings(ctx, SettingsInput{
+		ConcurrencyLimit: 9,
+		ApprovalPolicy:   "human approval required for risky actions",
+		Theme:            "pixel-hq-mint",
+		BudgetMode:       "balanced",
+	})
+	if err != nil {
+		t.Fatalf("UpdateRuntimeSettings() error = %v", err)
+	}
+	if updatedSettings.HasActiveRun {
+		t.Fatalf("UpdateRuntimeSettings() should not create a run")
+	}
+	if updatedSettings.Settings.ConcurrencyLimit != 9 {
+		t.Fatalf("UpdateRuntimeSettings() concurrency = %d, want 9", updatedSettings.Settings.ConcurrencyLimit)
+	}
+
+	providerState, err := service.UpsertAIProvider(ctx, AIProviderInput{
+		Name:          "Test Custom Provider",
+		Format:        "custom-http",
+		BaseURL:       "http://127.0.0.1:8080",
+		APIPath:       "/v1/dispatch",
+		DefaultModel:  "test-model",
+		PlannerModel:  "test-model",
+		WorkerModel:   "test-model",
+		ReviewerModel: "test-model",
+		HeadersJSON:   "{}",
+		Enabled:       true,
+		IsPrimary:     true,
+	})
+	if err != nil {
+		t.Fatalf("UpsertAIProvider() error = %v", err)
+	}
+	if providerState.HasActiveRun {
+		t.Fatalf("UpsertAIProvider() should not create a run")
+	}
+	if len(providerState.Settings.AIProviders) != 1 {
+		t.Fatalf("UpsertAIProvider() provider count = %d, want 1", len(providerState.Settings.AIProviders))
+	}
+
+	reloaded, err := service.GetDashboardState(ctx)
+	if err != nil {
+		t.Fatalf("GetDashboardState() reload error = %v", err)
+	}
+	if reloaded.HasActiveRun {
+		t.Fatalf("reloaded workspace unexpectedly reported an active run")
+	}
+	if reloaded.Settings.ConcurrencyLimit != 9 {
+		t.Fatalf("reloaded concurrency = %d, want 9", reloaded.Settings.ConcurrencyLimit)
+	}
+	if len(reloaded.Settings.AIProviders) != 1 {
+		t.Fatalf("reloaded provider count = %d, want 1", len(reloaded.Settings.AIProviders))
+	}
+}
+
 func TestServiceMethodsAreConnectedInOneChain(t *testing.T) {
 	service, err := NewService(t.TempDir(), eventbus.New())
 	if err != nil {
@@ -84,8 +167,11 @@ func TestServiceMethodsAreConnectedInOneChain(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetDashboardState() error = %v", err)
 	}
-	if state.Title == "" {
-		t.Fatalf("GetDashboardState() returned empty title")
+	if state.HasActiveRun {
+		t.Fatalf("GetDashboardState() unexpectedly reported an active run")
+	}
+	if len(state.Settings.AIProviders) != 0 {
+		t.Fatalf("GetDashboardState() unexpectedly preloaded AI providers")
 	}
 
 	created, err := service.CreateRun(ctx, RunCreationInput{
