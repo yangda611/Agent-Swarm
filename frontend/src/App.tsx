@@ -97,6 +97,10 @@ function App() {
         if (!isAutoRunning || !snapshot) {
             return;
         }
+        if (!snapshot.hasActiveRun) {
+            setAutoRunning(false);
+            return;
+        }
         if (snapshot.runStep >= snapshot.maxStep) {
             setAutoRunning(false);
             return;
@@ -207,6 +211,8 @@ function App() {
         );
     }
 
+    const hasActiveRun = snapshot.hasActiveRun;
+    const stageHeadline = hasActiveRun ? formatStageHeadline(snapshot.workflow.currentStage) : "Empty project";
     const selectedAgent = snapshot.agents.find((agent) => agent.id === selectedAgentId) || snapshot.agents[0];
     const currentStageKey = normalizeStageKey(snapshot.workflow.currentStage);
     const focusZoneId = zoneForStage(currentStageKey);
@@ -246,6 +252,7 @@ function App() {
 
                     {activeSectionId === "overview" ? (
                         <OverviewPanel
+                            hasActiveRun={hasActiveRun}
                             onCreateRun={() => setComposerOpen(true)}
                             onOpenProviders={() => setProviderOpen(true)}
                             settings={snapshot.settings}
@@ -263,7 +270,7 @@ function App() {
                                         <p className="page-section-copy">{activeOfficeTab.description}</p>
                                     </div>
                                     <div className="stat-pill-group">
-                                        <span className="soft-pill">{formatStageHeadline(snapshot.workflow.currentStage)}</span>
+                                        <span className="soft-pill">{stageHeadline}</span>
                                         <span className="soft-pill">{localizeText(focusedZone?.name || "指挥区")}</span>
                                         <span className="soft-pill">点击智能体查看详情与提示词</span>
                                     </div>
@@ -288,7 +295,7 @@ function App() {
                                 <div className="panel-header">
                                     <div>
                                         <p className="section-kicker">当前现场</p>
-                                        <h2 className="page-section-title">{formatStageHeadline(snapshot.workflow.currentStage)}</h2>
+                                        <h2 className="page-section-title">{stageHeadline}</h2>
                                         <p className="page-section-copy">{localizeText(focusedZone?.purpose || "主脑正在协调当前阶段的办公室现场。")}</p>
                                     </div>
                                     <div className="stat-pill-group office-inline-tip-row">
@@ -305,7 +312,7 @@ function App() {
                                     pendingGates={snapshot.workflow.pendingGates}
                                     selectedAgentId={selectedAgent?.id}
                                     stageMotionKey={stageMotionKey}
-                                    stageTitle={formatStageHeadline(snapshot.workflow.currentStage)}
+                                    stageTitle={stageHeadline}
                                     viewMode={officeViewMode}
                                     zones={snapshot.zones}
                                     onSelectAgent={(agentId) => {
@@ -323,6 +330,7 @@ function App() {
                     {activeSectionId === "settings" ? (
                         <SettingsPanel
                             busyLabel={busyLabel}
+                            hasActiveRun={hasActiveRun}
                             onAdvance={async () => {
                                 const success = await runAction("推进流程阶段", AdvanceDemoRun);
                                 if (success) {

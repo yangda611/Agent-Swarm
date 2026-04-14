@@ -18,6 +18,8 @@ import (
 
 const MaxDemoStep = 5
 
+var ErrNoActiveRun = errors.New("no active run found")
+
 type Service struct {
 	bus          *eventbus.Bus
 	store        *storage.Store
@@ -36,10 +38,6 @@ func NewService(workdir string, bus *eventbus.Bus) (*Service, error) {
 		store:        store,
 		artifactRoot: filepath.Join(workdir, "data", "artifacts"),
 	}
-	if err := s.bootstrap(context.Background()); err != nil {
-		return nil, err
-	}
-
 	return s, nil
 }
 
@@ -51,7 +49,7 @@ func (s *Service) Close() error {
 }
 
 func (s *Service) GetDashboardState(ctx context.Context) (DashboardState, error) {
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return DashboardState{}, err
 	}
@@ -64,17 +62,13 @@ func (s *Service) CreateRun(ctx context.Context, input RunCreationInput) (Dashbo
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	current, err := s.store.LoadSnapshot(ctx)
-	if err != nil && !errors.Is(err, storage.ErrNoSnapshot) {
+	current, err := s.loadSnapshotOrDefault(ctx)
+	if err != nil {
 		return DashboardState{}, err
 	}
 
-	settings := defaultSettings()
-	providers := defaultAIProviders()
-	if err == nil {
-		settings = current.Settings
-		providers = current.AIProviders
-	}
+	settings := current.Settings
+	providers := current.AIProviders
 
 	blueprint := buildPlanningBlueprint(ctx, input, providers)
 	snapshot := compileRunFromBlueprint(blueprint, settings, providers, time.Now())
@@ -100,9 +94,12 @@ func (s *Service) AdvanceDemoRun(ctx context.Context) (DashboardState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return DashboardState{}, err
+	}
+	if !hasActiveRun(snapshot) {
+		return DashboardState{}, ErrNoActiveRun
 	}
 
 	next := min(snapshot.Run.Step+1, MaxDemoStep)
@@ -123,9 +120,12 @@ func (s *Service) ResetDemoRun(ctx context.Context) (DashboardState, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return DashboardState{}, err
+	}
+	if !hasActiveRun(snapshot) {
+		return DashboardState{}, ErrNoActiveRun
 	}
 
 	updated := clearRunOutputs(snapshot, time.Now())
@@ -148,7 +148,7 @@ func (s *Service) UpdateRuntimeSettings(ctx context.Context, input SettingsInput
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return DashboardState{}, err
 	}
@@ -168,10 +168,13 @@ func (s *Service) UpdateRuntimeSettings(ctx context.Context, input SettingsInput
 	}
 
 	snapshot.Settings = settings
-	updated := applyProgression(snapshot, snapshot.Run.Step, time.Now())
-	updated, err = s.persistRunArtifacts(updated)
-	if err != nil {
-		return DashboardState{}, err
+	updated := snapshot
+	if hasActiveRun(snapshot) {
+		updated = applyProgression(snapshot, snapshot.Run.Step, time.Now())
+		updated, err = s.persistRunArtifacts(updated)
+		if err != nil {
+			return DashboardState{}, err
+		}
 	}
 	if err := s.store.SaveSnapshot(ctx, updated); err != nil {
 		return DashboardState{}, err
@@ -185,17 +188,20 @@ func (s *Service) UpsertAIProvider(ctx context.Context, input AIProviderInput) (
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return DashboardState{}, err
 	}
 
 	snapshot.AIProviders = upsertProviderConfig(snapshot.AIProviders, input, time.Now())
 	snapshot.ModelProfiles = modelProfilesForProviders(snapshot.AIProviders)
-	updated := applyProgression(snapshot, snapshot.Run.Step, time.Now())
-	updated, err = s.persistRunArtifacts(updated)
-	if err != nil {
-		return DashboardState{}, err
+	updated := snapshot
+	if hasActiveRun(snapshot) {
+		updated = applyProgression(snapshot, snapshot.Run.Step, time.Now())
+		updated, err = s.persistRunArtifacts(updated)
+		if err != nil {
+			return DashboardState{}, err
+		}
 	}
 	if err := s.store.SaveSnapshot(ctx, updated); err != nil {
 		return DashboardState{}, err
@@ -209,17 +215,20 @@ func (s *Service) DeleteAIProvider(ctx context.Context, id string) (DashboardSta
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return DashboardState{}, err
 	}
 
 	snapshot.AIProviders = deleteProviderConfig(snapshot.AIProviders, id)
 	snapshot.ModelProfiles = modelProfilesForProviders(snapshot.AIProviders)
-	updated := applyProgression(snapshot, snapshot.Run.Step, time.Now())
-	updated, err = s.persistRunArtifacts(updated)
-	if err != nil {
-		return DashboardState{}, err
+	updated := snapshot
+	if hasActiveRun(snapshot) {
+		updated = applyProgression(snapshot, snapshot.Run.Step, time.Now())
+		updated, err = s.persistRunArtifacts(updated)
+		if err != nil {
+			return DashboardState{}, err
+		}
 	}
 	if err := s.store.SaveSnapshot(ctx, updated); err != nil {
 		return DashboardState{}, err
@@ -233,7 +242,7 @@ func (s *Service) ProbeAIProvider(ctx context.Context, input AIProviderInput) (s
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	snapshot, err := s.store.LoadSnapshot(ctx)
+	snapshot, err := s.loadSnapshotOrDefault(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -244,21 +253,39 @@ func (s *Service) ProbeAIProvider(ctx context.Context, input AIProviderInput) (s
 	return report, nil
 }
 
-func (s *Service) bootstrap(ctx context.Context) error {
-	_, err := s.store.LoadSnapshot(ctx)
-	if err == nil {
-		return nil
-	}
-	if !errors.Is(err, storage.ErrNoSnapshot) {
-		return err
+func (s *Service) loadSnapshotOrDefault(ctx context.Context) (domain.Snapshot, error) {
+	snapshot, err := s.store.LoadSnapshot(ctx)
+	if err != nil {
+		if errors.Is(err, storage.ErrNoSnapshot) {
+			return emptySnapshot(), nil
+		}
+		return domain.Snapshot{}, err
 	}
 
-	snapshot := compileRun(defaultRunInput(), defaultSettings(), defaultAIProviders(), time.Now())
-	snapshot, err = s.persistRunArtifacts(snapshot)
-	if err != nil {
-		return err
+	snapshot.Settings = normalizeSettings(snapshot.Settings)
+	snapshot.AIProviders = normalizeProviders(snapshot.AIProviders)
+	if len(snapshot.ModelProfiles) == 0 {
+		snapshot.ModelProfiles = modelProfilesForProviders(snapshot.AIProviders)
 	}
-	return s.store.SaveSnapshot(ctx, snapshot)
+	if len(snapshot.Zones) == 0 {
+		snapshot.Zones = defaultZones()
+	}
+	return snapshot, nil
+}
+
+func emptySnapshot() domain.Snapshot {
+	settings := defaultSettings()
+	providers := normalizeProviders(nil)
+	return domain.Snapshot{
+		Settings:      settings,
+		AIProviders:   providers,
+		ModelProfiles: modelProfilesForProviders(providers),
+		Zones:         defaultZones(),
+	}
+}
+
+func hasActiveRun(snapshot domain.Snapshot) bool {
+	return compact(snapshot.Run.ID) != "" && compact(snapshot.Run.Title) != ""
 }
 
 func (s *Service) publish(name string, payload map[string]any) {
@@ -503,12 +530,44 @@ func toDashboardState(snapshot domain.Snapshot) DashboardState {
 		providers = append(providers, providerState(provider))
 	}
 
+	hasRun := hasActiveRun(snapshot)
+	title := snapshot.Run.Title
+	subtitle := snapshot.Run.Subtitle
+	workspaceName := snapshot.Run.WorkspaceName
+	activeTemplate := snapshot.Run.ActiveTemplate
+	suggestedAgentID := snapshot.Run.SuggestedAgentID
+	workflow := WorkflowSummary{
+		CurrentStage:     snapshot.Run.CurrentStage,
+		AtomicTaskPolicy: snapshot.Run.AtomicTaskPolicy,
+		ReviewMode:       snapshot.Run.ReviewMode,
+		PlannerSource:    snapshot.Run.PlannerSource,
+		PendingGates:     pendingGates,
+		CompletedGates:   completedGates,
+	}
+
+	if !hasRun {
+		title = "Empty project"
+		subtitle = "Create the first task to start planning, execution, and review."
+		workspaceName = productName + " / Empty workspace"
+		activeTemplate = ""
+		suggestedAgentID = ""
+		workflow = WorkflowSummary{
+			CurrentStage:     "No active run",
+			AtomicTaskPolicy: "Create a task to let the planner decompose work into atomic units.",
+			ReviewMode:       "This workspace has no active orchestration run yet.",
+			PlannerSource:    "not configured",
+			PendingGates:     nil,
+			CompletedGates:   nil,
+		}
+	}
+
 	return DashboardState{
-		Title:            snapshot.Run.Title,
-		Subtitle:         snapshot.Run.Subtitle,
-		WorkspaceName:    snapshot.Run.WorkspaceName,
-		ActiveTemplate:   snapshot.Run.ActiveTemplate,
-		SuggestedAgentID: snapshot.Run.SuggestedAgentID,
+		HasActiveRun:     hasRun,
+		Title:            title,
+		Subtitle:         subtitle,
+		WorkspaceName:    workspaceName,
+		ActiveTemplate:   activeTemplate,
+		SuggestedAgentID: suggestedAgentID,
 		RunStep:          snapshot.Run.Step,
 		MaxStep:          MaxDemoStep,
 		Metrics: []MetricCard{
@@ -517,14 +576,7 @@ func toDashboardState(snapshot domain.Snapshot) DashboardState {
 			{Label: "审核门禁", Value: fmt.Sprintf("%d / %d 已关闭", len(completedGates), len(snapshot.Gates)), Accent: "rose", Detail: "同评、QA、安全与交付门禁闭环情况。"},
 			{Label: "AI 接口注册表", Value: fmt.Sprintf("%d 在线 / %d 总计", enabledProviderCount(snapshot.AIProviders), len(snapshot.AIProviders)), Accent: "green", Detail: primaryProviderLabel(snapshot.AIProviders)},
 		},
-		Workflow: WorkflowSummary{
-			CurrentStage:     snapshot.Run.CurrentStage,
-			AtomicTaskPolicy: snapshot.Run.AtomicTaskPolicy,
-			ReviewMode:       snapshot.Run.ReviewMode,
-			PlannerSource:    snapshot.Run.PlannerSource,
-			PendingGates:     pendingGates,
-			CompletedGates:   completedGates,
-		},
+		Workflow: workflow,
 		Settings: SettingsSummary{
 			ConcurrencyLimit: snapshot.Settings.ConcurrencyLimit,
 			ApprovalPolicy:   snapshot.Settings.ApprovalPolicy,

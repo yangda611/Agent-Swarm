@@ -10,6 +10,7 @@ import {
 
 interface SettingsPanelProps {
     busyLabel: string;
+    hasActiveRun: boolean;
     onAdvance: () => Promise<void>;
     onOpenProviders: () => void;
     onReset: () => Promise<void>;
@@ -20,6 +21,7 @@ interface SettingsPanelProps {
 
 export function SettingsPanel({
     busyLabel,
+    hasActiveRun,
     onAdvance,
     onOpenProviders,
     onReset,
@@ -44,6 +46,9 @@ export function SettingsPanel({
     }, [settings]);
 
     const isBusy = busyLabel.length > 0;
+    const hasRunActions = hasActiveRun && !isBusy;
+    const stageHeadline = hasActiveRun ? formatStageHeadline(workflow.currentStage) : "No active run";
+    const plannerSource = hasActiveRun ? formatPlannerSource(workflow.plannerSource) : "Not configured";
     const validation = useMemo(() => {
         const issues: string[] = [];
         if (form.concurrencyLimit < 1 || form.concurrencyLimit > 100) {
@@ -73,8 +78,8 @@ export function SettingsPanel({
                         <p className="page-section-copy">把控制动作和运行参数集中到同一块面板里，减少来回切换。</p>
                     </div>
                     <div className="stat-pill-group settings-studio-pills">
-                        <span className="soft-pill">{formatStageHeadline(workflow.currentStage)}</span>
-                        <span className="soft-pill">{formatPlannerSource(workflow.plannerSource)}</span>
+                        <span className="soft-pill">{stageHeadline}</span>
+                        <span className="soft-pill">{plannerSource}</span>
                         <span className="soft-pill">{busyLabel || "当前就绪"}</span>
                     </div>
                 </div>
@@ -88,7 +93,7 @@ export function SettingsPanel({
                             </div>
 
                             <div className="settings-action-stack">
-                                <button className="quick-action-button primary" disabled={isBusy} onClick={() => void onAdvance()} type="button">
+                                <button className="quick-action-button primary" disabled={!hasRunActions} onClick={() => void onAdvance()} type="button">
                                     <span className="quick-action-icon">▶</span>
                                     <span>推进一阶段</span>
                                 </button>
@@ -96,11 +101,14 @@ export function SettingsPanel({
                                     <span className="quick-action-icon">◎</span>
                                     <span>管理接口</span>
                                 </button>
-                                <button className="quick-action-button" disabled={isBusy} onClick={() => void onReset()} type="button">
+                                <button className="quick-action-button" disabled={!hasRunActions} onClick={() => void onReset()} type="button">
                                     <span className="quick-action-icon">↺</span>
                                     <span>重置流程</span>
                                 </button>
                             </div>
+                            {!hasActiveRun ? (
+                                <p className="field-help">Create the first task before advancing or resetting the workflow.</p>
+                            ) : null}
                         </section>
 
                         <section className="surface-subcard settings-runtime-card">
@@ -108,11 +116,11 @@ export function SettingsPanel({
                             <div className="detail-list compact">
                                 <div className="detail-row multi">
                                     <span>当前阶段</span>
-                                    <strong>{formatStageHeadline(workflow.currentStage)}</strong>
+                                    <strong>{stageHeadline}</strong>
                                 </div>
                                 <div className="detail-row multi">
                                     <span>规划来源</span>
-                                    <strong>{formatPlannerSource(workflow.plannerSource)}</strong>
+                                    <strong>{plannerSource}</strong>
                                 </div>
                                 <div className="detail-row">
                                     <span>主路由</span>

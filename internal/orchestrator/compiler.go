@@ -58,9 +58,6 @@ func compileRunFromBlueprint(blueprint planningBlueprint, settings domain.Runtim
 	input := normalizeRunInputForCompiler(blueprint.Input)
 	settings = normalizeSettings(settings)
 	providers = normalizeProviders(providers)
-	if len(providers) == 0 {
-		providers = defaultAIProviders()
-	}
 
 	workstreams := normalizeBlueprintWorkstreams(blueprint.Workstreams, input)
 	agents, executionIDs := buildCompiledAgents(input, workstreams)

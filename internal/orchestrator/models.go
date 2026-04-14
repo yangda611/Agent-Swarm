@@ -2,6 +2,7 @@ package orchestrator
 
 // DashboardState is the single snapshot returned to the desktop UI.
 type DashboardState struct {
+	HasActiveRun     bool            `json:"hasActiveRun"`
 	Title            string          `json:"title"`
 	Subtitle         string          `json:"subtitle"`
 	WorkspaceName    string          `json:"workspaceName"`
