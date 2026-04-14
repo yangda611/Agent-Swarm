@@ -204,18 +204,23 @@ func promptForCloseAction(ctx context.Context) (closeAction, error) {
 	selection, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
 		Type:          runtime.QuestionDialog,
 		Title:         "关闭 maliang swarm",
-		Message:       "关闭窗口时，你可以选择最小化到后台继续运行，或者彻底关闭后台并释放当前占用。",
-		Buttons:       []string{minimiseToBackgroundLabel, closeBackgroundLabel},
-		DefaultButton: minimiseToBackgroundLabel,
-		CancelButton:  minimiseToBackgroundLabel,
+		Message:       "点击「是(Y)」将彻底关闭后台并释放当前占用。\n点击「否(N)」将最小化到后台继续运行。",
+		Buttons:       []string{closeBackgroundLabel, minimiseToBackgroundLabel},
+		DefaultButton: "No",
+		CancelButton:  "No",
 	})
 	if err != nil {
-		return closeActionExit, err
-	}
-
-	if selection == closeBackgroundLabel {
+		log.Printf("close dialog error: %v, default to exit", err)
 		return closeActionExit, nil
 	}
 
+	log.Printf("close dialog selection: %q", selection)
+
+	if selection == "Yes" || selection == closeBackgroundLabel {
+		log.Println("user confirmed full shutdown")
+		return closeActionExit, nil
+	}
+
+	log.Println("user chose minimise to background")
 	return closeActionMinimise, nil
 }
