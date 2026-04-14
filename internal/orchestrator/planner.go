@@ -425,7 +425,14 @@ func postProviderJSON(ctx context.Context, provider domain.AIProviderConfig, tar
 		return nil, err
 	}
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("planner request failed with %s", resp.Status)
+		detail := compact(string(responseBody))
+		if detail == "" {
+			return nil, fmt.Errorf("planner request failed with %s", resp.Status)
+		}
+		if len(detail) > 240 {
+			detail = detail[:237] + "..."
+		}
+		return nil, fmt.Errorf("planner request failed with %s: %s", resp.Status, detail)
 	}
 
 	return responseBody, nil
@@ -488,21 +495,54 @@ func buildGeminiURL(provider domain.AIProviderConfig) (string, error) {
 }
 
 func buildProviderURL(provider domain.AIProviderConfig, path string) (string, error) {
-	base := strings.TrimRight(strings.TrimSpace(provider.BaseURL), "/")
 	path = strings.TrimSpace(path)
 	if strings.HasPrefix(path, "http://") || strings.HasPrefix(path, "https://") {
 		return path, nil
 	}
-	if base == "" {
+
+	baseURL := strings.TrimSpace(provider.BaseURL)
+	if baseURL == "" {
 		return "", errors.New("provider base URL is empty")
 	}
+
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid provider base URL: %w", err)
+	}
 	if path == "" {
-		return base, nil
+		return strings.TrimRight(base.String(), "/"), nil
 	}
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+
+	relative, err := url.Parse(path)
+	if err != nil {
+		return "", fmt.Errorf("invalid provider API path: %w", err)
 	}
-	return base + path, nil
+
+	normalizedPath := relative.Path
+	if normalizedPath == "" {
+		normalizedPath = "/"
+	}
+	if !strings.HasPrefix(normalizedPath, "/") {
+		normalizedPath = "/" + normalizedPath
+	}
+
+	basePath := strings.TrimRight(base.Path, "/")
+	if basePath != "" && (normalizedPath == basePath || strings.HasPrefix(normalizedPath, basePath+"/")) {
+		normalizedPath = strings.TrimPrefix(normalizedPath, basePath)
+		if normalizedPath == "" {
+			normalizedPath = "/"
+		}
+	}
+
+	base.Path = strings.TrimRight(basePath, "/") + normalizedPath
+	query := base.Query()
+	for key, values := range relative.Query() {
+		for _, value := range values {
+			query.Add(key, value)
+		}
+	}
+	base.RawQuery = query.Encode()
+	return base.String(), nil
 }
 
 func addQueryValue(targetURL string, key string, value string) (string, error) {
