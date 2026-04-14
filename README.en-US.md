@@ -43,6 +43,12 @@ GitHub Actions release workflow is configured:
   - macOS: `.zip` (app bundle or binary)
   - Linux: `.tar.gz` (binary package)
 
+### Release Reliability Notes
+
+- macOS builds target both Intel (`darwin/amd64`) and Apple Silicon (`darwin/arm64`)
+- Linux build automatically detects WebKit dev package (`4.0` / `4.1`) and applies matching Wails build tags
+- Release binary naming is unified as `maliang-swarm` for consistent cross-platform packaging
+
 ## Project Layout
 
 - `internal/orchestrator`: planning, execution progression, handoff logic, trace enrichment
