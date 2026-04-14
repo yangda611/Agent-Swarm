@@ -2,24 +2,48 @@ package main
 
 import (
 	"context"
+	"log"
 	"os"
+	"sync"
 
 	"maliangswarm/internal/eventbus"
 	"maliangswarm/internal/orchestrator"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+type closeAction string
+
+const (
+	closeActionMinimise closeAction = "minimise"
+	closeActionExit     closeAction = "exit"
+)
+
+const (
+	minimiseToBackgroundLabel = "最小化到后台"
+	closeBackgroundLabel      = "关闭后台"
 )
 
 // App struct
 type App struct {
-	ctx       context.Context
-	bus       *eventbus.Bus
-	dashboard *orchestrator.Service
-	bootErr   error
+	ctx               context.Context
+	bus               *eventbus.Bus
+	dashboard         *orchestrator.Service
+	bootErr           error
+	closeMu           sync.Mutex
+	shutdownOnce      sync.Once
+	closeApproved     bool
+	promptCloseAction func(context.Context) (closeAction, error)
+	minimiseWindow    func(context.Context)
+	closeDashboard    func() error
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
 	return &App{
-		bus: eventbus.New(),
+		bus:               eventbus.New(),
+		promptCloseAction: promptForCloseAction,
+		minimiseWindow:    runtime.WindowMinimise,
 	}
 }
 
@@ -35,6 +59,9 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	a.dashboard, a.bootErr = orchestrator.NewService(workdir, a.bus)
+	if a.bootErr == nil && a.dashboard != nil {
+		a.closeDashboard = a.dashboard.Close
+	}
 }
 
 // GetDashboardState returns the current enterprise swarm snapshot used by the UI.
@@ -99,4 +126,96 @@ func (a *App) ProbeAIProvider(input orchestrator.AIProviderInput) (string, error
 		return "", a.bootErr
 	}
 	return a.dashboard.ProbeAIProvider(a.ctx, input)
+}
+
+func (a *App) beforeClose(ctx context.Context) bool {
+	if a.isCloseApproved() {
+		return false
+	}
+
+	action, err := a.resolveCloseAction(ctx)
+	if err != nil {
+		log.Printf("close confirmation failed, falling back to full shutdown: %v", err)
+		a.approveClose()
+		return false
+	}
+
+	if action == closeActionExit {
+		a.approveClose()
+		return false
+	}
+
+	if currentCtx := a.resolveContext(ctx); currentCtx != nil && a.minimiseWindow != nil {
+		a.minimiseWindow(currentCtx)
+	}
+
+	return true
+}
+
+func (a *App) shutdown(_ context.Context) {
+	a.approveClose()
+
+	a.shutdownOnce.Do(func() {
+		if a.closeDashboard == nil && a.dashboard != nil {
+			a.closeDashboard = a.dashboard.Close
+		}
+		if a.closeDashboard == nil {
+			return
+		}
+		if err := a.closeDashboard(); err != nil {
+			log.Printf("failed to close background service cleanly: %v", err)
+		}
+	})
+}
+
+func (a *App) resolveCloseAction(ctx context.Context) (closeAction, error) {
+	if a.promptCloseAction == nil {
+		return closeActionExit, nil
+	}
+	currentCtx := a.resolveContext(ctx)
+	if currentCtx == nil {
+		return closeActionExit, nil
+	}
+	return a.promptCloseAction(currentCtx)
+}
+
+func (a *App) resolveContext(ctx context.Context) context.Context {
+	if ctx != nil {
+		return ctx
+	}
+	return a.ctx
+}
+
+func (a *App) approveClose() {
+	a.closeMu.Lock()
+	defer a.closeMu.Unlock()
+
+	a.closeApproved = true
+}
+
+func (a *App) isCloseApproved() bool {
+	a.closeMu.Lock()
+	defer a.closeMu.Unlock()
+
+	return a.closeApproved
+}
+
+func promptForCloseAction(ctx context.Context) (closeAction, error) {
+	selection, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
+		Type:          runtime.QuestionDialog,
+		Title:         "关闭 maliang swarm",
+		Message:       "关闭窗口时，你可以选择最小化到后台继续运行，或者彻底关闭后台并释放当前占用。",
+		Buttons:       []string{minimiseToBackgroundLabel, closeBackgroundLabel},
+		DefaultButton: minimiseToBackgroundLabel,
+		CancelButton:  minimiseToBackgroundLabel,
+	})
+	if err != nil {
+		return closeActionExit, err
+	}
+
+	if selection == closeBackgroundLabel {
+		return closeActionExit, nil
+	}
+
+	return closeActionMinimise, nil
 }
