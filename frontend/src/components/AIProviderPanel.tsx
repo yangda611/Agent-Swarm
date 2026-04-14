@@ -13,7 +13,7 @@ interface AIProviderPanelProps {
 }
 
 const baseUrlPlaceholders: Record<string, string> = {
-    "openai-compatible": "https://api.openai.com",
+    "openai-compatible": "https://api.openai.com/v1",
     anthropic: "https://api.anthropic.com",
     gemini: "https://generativelanguage.googleapis.com",
     "azure-openai": "https://YOUR-RESOURCE.openai.azure.com",
@@ -22,7 +22,7 @@ const baseUrlPlaceholders: Record<string, string> = {
 };
 
 const pathPlaceholders: Record<string, string> = {
-    "openai-compatible": "/v1/responses",
+    "openai-compatible": "/responses",
     anthropic: "/v1/messages",
     gemini: "/v1beta/models",
     "azure-openai": "/openai/responses",
@@ -38,6 +38,8 @@ const modelPlaceholders: Record<string, string> = {
     ollama: "qwen2.5-coder:14b",
     "custom-http": "custom-model",
 };
+
+const inheritedModelPlaceholder = "留空则沿用默认模型";
 
 function emptyProviderInput(makePrimary: boolean): AIProviderInput {
     return {
@@ -187,6 +189,7 @@ export function AIProviderPanel({
     const baseUrlPlaceholder = baseUrlPlaceholders[form.format];
     const pathPlaceholder = pathPlaceholders[form.format];
     const modelPlaceholder = modelPlaceholders[form.format];
+    const isOpenAICompatible = form.format === "openai-compatible";
 
     return (
         <section className="page-stack">
@@ -302,6 +305,9 @@ export function AIProviderPanel({
                                         placeholder={baseUrlPlaceholder}
                                         value={form.baseUrl}
                                     />
+                                    {isOpenAICompatible ? (
+                                        <small className="field-help">OpenAI 兼容格式请直接填到版本层级，例如 `https://openclawroot.com/v1`。</small>
+                                    ) : null}
                                 </label>
 
                                 <label className="field-group">
@@ -314,6 +320,7 @@ export function AIProviderPanel({
                                         value={form.apiPath}
                                     />
                                 </label>
+                                {!isOpenAICompatible ? (
 
                                 <label className="field-group">
                                     <span className="field-label">接口版本</span>
@@ -325,6 +332,7 @@ export function AIProviderPanel({
                                         value={form.apiVersion}
                                     />
                                 </label>
+                                ) : null}
                             </div>
                         </section>
 
@@ -352,7 +360,7 @@ export function AIProviderPanel({
                                         className="field-input"
                                         disabled={isBusy}
                                         onChange={(event) => setForm((current) => ({...current, plannerModel: event.target.value}))}
-                                        placeholder={modelPlaceholder}
+                                        placeholder={inheritedModelPlaceholder}
                                         value={form.plannerModel}
                                     />
                                 </label>
@@ -363,7 +371,7 @@ export function AIProviderPanel({
                                         className="field-input"
                                         disabled={isBusy}
                                         onChange={(event) => setForm((current) => ({...current, workerModel: event.target.value}))}
-                                        placeholder={modelPlaceholder}
+                                        placeholder={inheritedModelPlaceholder}
                                         value={form.workerModel}
                                     />
                                 </label>
@@ -374,7 +382,7 @@ export function AIProviderPanel({
                                         className="field-input"
                                         disabled={isBusy}
                                         onChange={(event) => setForm((current) => ({...current, reviewerModel: event.target.value}))}
-                                        placeholder={modelPlaceholder}
+                                        placeholder={inheritedModelPlaceholder}
                                         value={form.reviewerModel}
                                     />
                                 </label>
