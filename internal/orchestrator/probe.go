@@ -46,10 +46,18 @@ func previewProviderConfig(providers []domain.AIProviderConfig, input AIProvider
 }
 
 func probeProvider(ctx context.Context, provider domain.AIProviderConfig) string {
+	address := strings.TrimSpace(provider.BaseURL)
+	if targetURL, err := buildProviderURL(provider, provider.APIPath); err == nil {
+		address = targetURL
+	} else if path := strings.TrimSpace(provider.APIPath); path != "" {
+		address += path
+	}
+
 	lines := []string{
 		fmt.Sprintf("接口：%s（%s）", provider.Name, zhProviderFormat(provider.Format)),
 		fmt.Sprintf("地址：%s%s", provider.BaseURL, provider.APIPath),
 	}
+	lines[1] = fmt.Sprintf("地址：%s", address)
 
 	if compact(provider.BaseURL) == "" {
 		lines = append(lines, "总结果：失败。缺少基础 URL。")

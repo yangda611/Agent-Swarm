@@ -17,8 +17,8 @@ func defaultAIProviders() []domain.AIProviderConfig {
 			ID:            "provider-openai-compatible",
 			Name:          "OpenAI 兼容网关",
 			Format:        "openai-compatible",
-			BaseURL:       "https://api.openai.com",
-			APIPath:       "/v1/responses",
+			BaseURL:       "https://api.openai.com/v1",
+			APIPath:       "/responses",
 			DefaultModel:  "gpt-5.4",
 			PlannerModel:  "gpt-5.4",
 			WorkerModel:   "gpt-5.4-mini",
@@ -380,7 +380,7 @@ func defaultProviderBaseURL(format string) string {
 	case "custom-http":
 		return "https://your-gateway.example.com"
 	default:
-		return "https://api.openai.com"
+		return "https://api.openai.com/v1"
 	}
 }
 
@@ -397,7 +397,7 @@ func defaultProviderAPIPath(format string) string {
 	case "custom-http":
 		return "/v1/dispatch"
 	default:
-		return "/v1/responses"
+		return "/responses"
 	}
 }
 
