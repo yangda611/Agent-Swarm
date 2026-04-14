@@ -15,7 +15,28 @@ import (
 	"maliangswarm/internal/domain"
 )
 
-var plannerHTTPClient = &http.Client{Timeout: 45 * time.Second}
+var plannerHTTPClient = &http.Client{
+	Timeout: 45 * time.Second,
+	CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after %d redirects", len(via))
+		}
+		if len(via) > 0 && via[0].Method == http.MethodPost {
+			req.Method = http.MethodPost
+			if via[0].Body != nil {
+				req.Body = via[0].Body
+				req.GetBody = via[0].GetBody
+				req.ContentLength = via[0].ContentLength
+			}
+			for key, values := range via[0].Header {
+				if key != "Content-Length" {
+					req.Header[key] = values
+				}
+			}
+		}
+		return nil
+	},
+}
 
 type plannerOutput struct {
 	Title                 *string             `json:"title"`
@@ -529,9 +550,6 @@ func buildProviderURL(provider domain.AIProviderConfig, path string) (string, er
 	basePath := strings.TrimRight(base.Path, "/")
 	if basePath != "" && (normalizedPath == basePath || strings.HasPrefix(normalizedPath, basePath+"/")) {
 		normalizedPath = strings.TrimPrefix(normalizedPath, basePath)
-		if normalizedPath == "" {
-			normalizedPath = "/"
-		}
 	}
 
 	base.Path = strings.TrimRight(basePath, "/") + normalizedPath

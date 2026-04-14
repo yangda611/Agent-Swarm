@@ -339,6 +339,7 @@ export namespace orchestrator {
 	    }
 	}
 	export class DashboardState {
+	    hasActiveRun: boolean;
 	    title: string;
 	    subtitle: string;
 	    workspaceName: string;
@@ -361,6 +362,7 @@ export namespace orchestrator {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasActiveRun = source["hasActiveRun"];
 	        this.title = source["title"];
 	        this.subtitle = source["subtitle"];
 	        this.workspaceName = source["workspaceName"];
